@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central de Demandas</title>
+<style>
+  :root {
+    --bg: #0e1320; --panel: #161d2e; --panel-2: #1d2740; --line: #2a3550;
+    --ink: #e8edf7; --muted: #8494b4; --accent: #4f7cff;
+    --wdm: #7c5cff; --afya: #17b890; --loja: #ff6b9d; --pessoal: #f5a524;
+    --todo: #64748b; --doing: #4f7cff; --blocked: #ef4444; --done: #22c55e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.4; -webkit-font-smoothing: antialiased; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex;
+    align-items: center; gap: 14px; flex-wrap: wrap; background: var(--panel); position: sticky; top: 0; z-index: 20; }
+  h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.4px; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  .spacer { flex: 1; }
+  .btn { background: var(--accent); color: #fff; border: 0; border-radius: 9px;
+    padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; transition: filter .15s; }
+  .btn:hover { filter: brightness(1.12); }
+  .btn.ghost { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); }
+  .btn.paste { background: linear-gradient(135deg, #7c5cff, #4f7cff); }
+  .sync { font-size: 12px; color: var(--muted); }
+  .sync.err { color: #fca5a5; }
+
+  .filters { display: flex; gap: 8px; padding: 14px 24px; flex-wrap: wrap; align-items: center; }
+  .chip { padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--muted); display: flex;
+    align-items: center; gap: 7px; transition: all .15s; }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .chip.active { color: var(--ink); border-color: transparent; }
+  .chip.active.wdm { background: color-mix(in srgb, var(--wdm) 22%, transparent); border-color: var(--wdm); }
+  .chip.active.afya { background: color-mix(in srgb, var(--afya) 22%, transparent); border-color: var(--afya); }
+  .chip.active.loja { background: color-mix(in srgb, var(--loja) 22%, transparent); border-color: var(--loja); }
+  .chip.active.pessoal { background: color-mix(in srgb, var(--pessoal) 22%, transparent); border-color: var(--pessoal); }
+  .chip.active.all { background: var(--panel-2); border-color: var(--accent); }
+  .search { margin-left: auto; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 9px; padding: 9px 13px; color: var(--ink); font-size: 14px; width: 220px; }
+  .search::placeholder { color: var(--muted); }
+
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 8px 24px 40px; align-items: start; }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; min-height: 120px; }
+  .col-head { padding: 14px 16px; display: flex; align-items: center; gap: 9px; border-bottom: 1px solid var(--line); }
+  .col-head .bar { width: 4px; height: 16px; border-radius: 2px; }
+  .col-head h2 { font-size: 14px; font-weight: 700; }
+  .col-head .count { margin-left: auto; background: var(--panel-2); color: var(--muted);
+    font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+  .col.todo .bar { background: var(--todo); }
+  .col.doing .bar { background: var(--doing); }
+  .col.blocked .bar { background: var(--blocked); }
+  .col.done .bar { background: var(--done); }
+  .col-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 60px; }
+
+  .card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px;
+    padding: 13px; cursor: grab; position: relative; transition: border-color .15s; }
+  .card:hover { border-color: var(--accent); }
+  .card.dragging { opacity: .5; }
+  .card .area-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 8px; }
+  .card .area-tag .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .card h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; line-height: 1.3; }
+  .card .brief-preview { font-size: 12px; color: var(--muted); margin-bottom: 10px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; }
+  .prio-alta { background: color-mix(in srgb, #ef4444 20%, transparent); color: #fca5a5; }
+  .prio-media { background: color-mix(in srgb, #f5a524 20%, transparent); color: #fcd34d; }
+  .prio-baixa { background: color-mix(in srgb, #64748b 25%, transparent); color: #cbd5e1; }
+  .due { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--panel); color: var(--muted); }
+  .due.soon { color: #fcd34d; }
+  .due.late { background: color-mix(in srgb, #ef4444 22%, transparent); color: #fca5a5; }
+  .card .blocked-reason { margin-top: 9px; font-size: 12px; background: color-mix(in srgb, #ef4444 12%, transparent);
+    border-left: 3px solid var(--blocked); padding: 6px 9px; border-radius: 4px; color: #fca5a5; }
+  .empty-col { text-align: center; color: var(--muted); font-size: 13px; padding: 24px 8px; opacity: .6; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(6,10,20,.72); backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    width: 100%; max-width: 540px; max-height: 90vh; overflow-y: auto; padding: 24px; }
+  .modal h2 { font-size: 18px; margin-bottom: 4px; }
+  .modal .sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .3px; }
+  input, select, textarea { width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 9px; padding: 11px 13px; color: var(--ink); font-size: 14px; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 90px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
+  .modal-actions .btn { flex: 1; }
+  .btn.danger { background: transparent; border: 1px solid var(--blocked); color: #fca5a5; flex: 0 0 auto; }
+  #blockedField { display: none; }
+  .loading { padding: 60px; text-align: center; color: var(--muted); }
+  .config-warn { background: color-mix(in srgb, #f5a524 14%, transparent); border: 1px solid var(--pessoal);
+    color: #fcd34d; padding: 12px 16px; margin: 12px 24px; border-radius: 10px; font-size: 13px; }
+  .paste-hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  .paste-hint code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+  .paste-result { font-size: 13px; margin-top: 10px; padding: 8px 12px; border-radius: 8px; }
+  .paste-result.ok { background: color-mix(in srgb, #22c55e 14%, transparent); color: #86efac; }
+  .paste-result.bad { background: color-mix(in srgb, #ef4444 14%, transparent); color: #fca5a5; }
+
+  @media (max-width: 900px) {
+    .board { grid-template-columns: 1fr; padding: 8px 16px 40px; }
+    .search { width: 100%; margin: 0; order: 5; }
+    .filters { padding: 12px 16px; }
+    header { padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     CONFIGURAÇÃO — preencha estas 2 linhas com os dados do seu Supabase
+     (Project Settings > API): a URL do projeto e a chave "anon public"
+     ============================================================ -->
+<script>
+  const SUPABASE_URL  = "https://zeptlqyiplnoaljwiluj.supabase.co";   // <-- troque aqui
+  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplcHRscXlpcGxub2FsandpbHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMDEwNzMsImV4cCI6MjEwMDg3NzA3M30.ajZtXoLsLqGzvF0wf8fdPX8169RKcq9hoZ9BP4pKv2w";             // <-- troque aqui
+</script>
+
+<header>
+  <h1>Central de Demandas <span>· visão única de tudo</span></h1>
+  <span class="sync" id="syncStatus"></span>
+  <div class="spacer"></div>
+  <button class="btn paste" id="pasteBtn">📋 Colar demanda</button>
+  <button class="btn ghost" id="newBtn">+ Manual</button>
+</header>
+
+<div class="filters" id="areaFilters">
+  <div class="chip all active" data-area="all">Todas</div>
+  <div class="chip wdm" data-area="wdm"><span class="dot" style="background:var(--wdm)"></span>WDM</div>
+  <div class="chip afya" data-area="afya"><span class="dot" style="background:var(--afya)"></span>Afya</div>
+  <div class="chip loja" data-area="loja"><span class="dot" style="background:var(--loja)"></span>Loja</div>
+  <div class="chip pessoal" data-area="pessoal"><span class="dot" style="background:var(--pessoal)"></span>Pessoal</div>
+  <input class="search" id="search" placeholder="Buscar demanda...">
+</div>
+
+<div id="app"><div class="loading">Carregando suas demandas...</div></div>
+
+<!-- Modal manual -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modalTitle">Nova demanda</h2>
+    <input type="hidden" id="taskId">
+    <label>Título</label>
+    <input id="fTitle" placeholder="Ex: Campanha de captação vestibular">
+    <label>Briefing / descrição</label>
+    <textarea id="fBrief" placeholder="Contexto, objetivo, entregáveis, referências..."></textarea>
+    <div class="row">
+      <div><label>Área</label>
+        <select id="fArea"><option value="wdm">WDM</option><option value="afya">Afya</option>
+        <option value="loja">Loja (esposa)</option><option value="pessoal">Pessoal</option></select></div>
+      <div><label>Prioridade</label>
+        <select id="fPrio"><option value="alta">Alta</option><option value="media" selected>Média</option><option value="baixa">Baixa</option></select></div>
+    </div>
+    <div class="row">
+      <div><label>Status</label>
+        <select id="fStatus"><option value="todo">Não iniciado</option><option value="doing">Em andamento</option>
+        <option value="blocked">Pendente / travado</option><option value="done">Concluído</option></select></div>
+      <div><label>Prazo</label><input type="date" id="fDue"></div>
+    </div>
+    <div id="blockedField">
+      <label>Por que não foi finalizado? (motivo do bloqueio)</label>
+      <textarea id="fReason" placeholder="Ex: aguardando aprovação do briefing pelo cliente"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn danger" id="deleteBtn" style="display:none">Excluir</button>
+      <button class="btn ghost" id="cancelBtn">Cancelar</button>
+      <button class="btn" id="saveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal colar demanda -->
+<div class="overlay" id="pasteOverlay">
+  <div class="modal">
+    <h2>Colar demanda</h2>
+    <div class="sub">Cole aqui o bloco que o Claude te mandou e clique em Criar. Dá pra colar vários de uma vez.</div>
+    <textarea id="pasteInput" style="min-height:180px" placeholder='Cole aqui o JSON que o Claude enviou...'></textarea>
+    <div class="paste-hint">Formato aceito: um bloco <code>{...}</code> ou vários dentro de <code>[...]</code>, com os campos title, brief, area, prio, status, due, reason.</div>
+    <div id="pasteResult"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="pasteCancel">Cancelar</button>
+      <button class="btn" id="pasteCreate">Criar card(s) ✓</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const AREAS = { wdm:{label:'WDM',color:'var(--wdm)'}, afya:{label:'Afya',color:'var(--afya)'},
+  loja:{label:'Loja',color:'var(--loja)'}, pessoal:{label:'Pessoal',color:'var(--pessoal)'} };
+const COLS = [ {key:'todo',label:'Não iniciado'}, {key:'doing',label:'Em andamento'},
+  {key:'blocked',label:'Pendente / travado'}, {key:'done',label:'Concluído'} ];
+const PRIO = { alta:'Alta', media:'Média', baixa:'Baixa' };
+
+let tasks = [];
+let filterArea = 'all';
+let searchTerm = '';
+const configured = !SUPABASE_URL.includes('SEU-PROJETO');
+
+/* ---------- Camada Supabase (REST) ---------- */
+function sbHeaders() {
+  return { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + SUPABASE_ANON, 'Content-Type': 'application/json' };
+}
+function setSync(txt, err) {
+  const el = document.getElementById('syncStatus');
+  el.textContent = txt; el.className = 'sync' + (err ? ' err' : '');
+}
+async function dbList() {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/demandas?select=*&order=created_at.asc`, { headers: sbHeaders() });
+  if (!r.ok) throw new Error('list');
+  return await r.json();
+}
+async function dbInsert(t) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/demandas`, { method:'POST',
+    headers: { ...sbHeaders(), 'Prefer':'return=representation' }, body: JSON.stringify(t) });
+  if (!r.ok) throw new Error('insert');
+  return (await r.json())[0];
+}
+async function dbUpdate(id, patch) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/demandas?id=eq.${id}`, { method:'PATCH',
+    headers: sbHeaders(), body: JSON.stringify(patch) });
+  if (!r.ok) throw new Error('update');
+}
+async function dbDelete(id) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/demandas?id=eq.${id}`, { method:'DELETE', headers: sbHeaders() });
+  if (!r.ok) throw new Error('delete');
+}
+
+async function load() {
+  if (!configured) {
+    document.getElementById('app').innerHTML =
+      '<div class="config-warn">⚙️ Falta configurar o Supabase. Abra o index.html e preencha SUPABASE_URL e SUPABASE_ANON no topo. Enquanto isso o painel funciona só na memória desta aba.</div>';
+    tasks = seed(); render(); return;
+  }
+  try {
+    setSync('sincronizando...');
+    tasks = await dbList();
+    setSync('✓ sincronizado');
+    render();
+  } catch (e) {
+    setSync('⚠ sem conexão com o banco', true);
+    tasks = []; render();
+  }
+}
+function seed() {
+  return [ { id:'demo1', title:'Exemplo — configure o Supabase para salvar de verdade', brief:'Este card só existe nesta aba.', area:'pessoal', prio:'media', status:'todo', due:'', reason:'' } ];
+}
+
+function dueInfo(due) {
+  if (!due) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(due + 'T00:00:00');
+  const diff = Math.round((d - today) / 86400000);
+  let cls='', txt='';
+  if (diff<0){cls='late';txt=`Atrasado ${Math.abs(diff)}d`;}
+  else if(diff===0){cls='soon';txt='Vence hoje';}
+  else if(diff<=3){cls='soon';txt=`Em ${diff}d`;}
+  else txt=d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
+  return {cls,txt};
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const visible = tasks.filter(t =>
+    (filterArea==='all'||t.area===filterArea) &&
+    (t.title+' '+(t.brief||'')).toLowerCase().includes(searchTerm));
+  const board = document.createElement('div'); board.className='board';
+  COLS.forEach(col => {
+    const items = visible.filter(t=>t.status===col.key).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
+    const colEl = document.createElement('div'); colEl.className='col '+col.key;
+    colEl.innerHTML = `<div class="col-head"><span class="bar"></span><h2>${col.label}</h2><span class="count">${items.length}</span></div>`;
+    const body = document.createElement('div'); body.className='col-body';
+    if (items.length===0) body.innerHTML='<div class="empty-col">Nada aqui</div>';
+    items.forEach(t=>body.appendChild(cardEl(t)));
+    colEl.appendChild(body);
+    colEl.addEventListener('dragover', e=>e.preventDefault());
+    colEl.addEventListener('drop', async e=>{
+      e.preventDefault();
+      const tid = e.dataTransfer.getData('id');
+      const task = tasks.find(x=>String(x.id)===tid);
+      if (task && task.status!==col.key) {
+        task.status = col.key;
+        const patch = { status: col.key };
+        if (col.key!=='blocked'){ task.reason=''; patch.reason=''; }
+        render();
+        if (configured) { try { await dbUpdate(task.id, patch); setSync('✓ salvo'); } catch { setSync('⚠ erro ao salvar', true); } }
+      }
+    });
+    board.appendChild(colEl);
+  });
+  app.innerHTML=''; app.appendChild(board);
+}
+
+function cardEl(t) {
+  const el = document.createElement('div'); el.className='card'; el.draggable=true;
+  const a = AREAS[t.area]||AREAS.pessoal; const di = dueInfo(t.due);
+  el.innerHTML = `
+    <span class="area-tag" style="color:${a.color}"><span class="dot" style="background:${a.color}"></span>${a.label}</span>
+    <h3>${esc(t.title)}</h3>
+    ${t.brief?`<div class="brief-preview">${esc(t.brief)}</div>`:''}
+    <div class="meta"><span class="badge prio-${t.prio}">${PRIO[t.prio]}</span>
+    ${di?`<span class="due ${di.cls}">${di.txt}</span>`:''}</div>
+    ${t.status==='blocked'&&t.reason?`<div class="blocked-reason">⚠ ${esc(t.reason)}</div>`:''}`;
+  el.addEventListener('click', ()=>openModal(t));
+  el.addEventListener('dragstart', e=>{ e.dataTransfer.setData('id',String(t.id)); el.classList.add('dragging'); });
+  el.addEventListener('dragend', ()=>el.classList.remove('dragging'));
+  return el;
+}
+function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---------- Modal manual ---------- */
+const overlay = document.getElementById('overlay');
+function openModal(t) {
+  document.getElementById('modalTitle').textContent = t?'Editar demanda':'Nova demanda';
+  document.getElementById('taskId').value = t?t.id:'';
+  document.getElementById('fTitle').value = t?t.title:'';
+  document.getElementById('fBrief').value = t?t.brief:'';
+  document.getElementById('fArea').value = t?t.area:(filterArea==='all'?'wdm':filterArea);
+  document.getElementById('fPrio').value = t?t.prio:'media';
+  document.getElementById('fStatus').value = t?t.status:'todo';
+  document.getElementById('fDue').value = t?(t.due||''):'';
+  document.getElementById('fReason').value = t?(t.reason||''):'';
+  document.getElementById('deleteBtn').style.display = t?'block':'none';
+  toggleReason(); overlay.classList.add('open');
+}
+function closeModal(){ overlay.classList.remove('open'); }
+function toggleReason(){ document.getElementById('blockedField').style.display =
+  document.getElementById('fStatus').value==='blocked'?'block':'none'; }
+document.getElementById('fStatus').addEventListener('change', toggleReason);
+document.getElementById('newBtn').addEventListener('click', ()=>openModal(null));
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+overlay.addEventListener('click', e=>{ if(e.target===overlay) closeModal(); });
+
+document.getElementById('saveBtn').addEventListener('click', async ()=>{
+  const title = document.getElementById('fTitle').value.trim();
+  if (!title){ document.getElementById('fTitle').focus(); return; }
+  const tid = document.getElementById('taskId').value;
+  const data = {
+    title, brief: document.getElementById('fBrief').value.trim(),
+    area: document.getElementById('fArea').value, prio: document.getElementById('fPrio').value,
+    status: document.getElementById('fStatus').value, due: document.getElementById('fDue').value||null,
+    reason: document.getElementById('fReason').value.trim(),
+  };
+  if (data.status!=='blocked') data.reason='';
+  try {
+    if (tid) { Object.assign(tasks.find(x=>String(x.id)===tid), data); if (configured) await dbUpdate(tid, data); }
+    else { if (configured) { const created = await dbInsert(data); tasks.push(created); } else tasks.push({ id:'local'+Date.now(), ...data }); }
+    setSync('✓ salvo');
+  } catch { setSync('⚠ erro ao salvar', true); }
+  closeModal(); render();
+});
+document.getElementById('deleteBtn').addEventListener('click', async ()=>{
+  const tid = document.getElementById('taskId').value;
+  tasks = tasks.filter(x=>String(x.id)!==tid);
+  try { if (configured) await dbDelete(tid); setSync('✓ salvo'); } catch { setSync('⚠ erro ao salvar', true); }
+  closeModal(); render();
+});
+
+/* ---------- Filtros ---------- */
+document.getElementById('areaFilters').addEventListener('click', e=>{
+  const chip = e.target.closest('.chip'); if(!chip) return;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  chip.classList.add('active'); filterArea = chip.dataset.area; render();
+});
+document.getElementById('search').addEventListener('input', e=>{ searchTerm=e.target.value.toLowerCase(); render(); });
+
+/* ---------- Colar demanda ---------- */
+const pasteOverlay = document.getElementById('pasteOverlay');
+const pasteInput = document.getElementById('pasteInput');
+const pasteResult = document.getElementById('pasteResult');
+document.getElementById('pasteBtn').addEventListener('click', ()=>{
+  pasteInput.value=''; pasteResult.innerHTML=''; pasteOverlay.classList.add('open'); setTimeout(()=>pasteInput.focus(),100);
+});
+document.getElementById('pasteCancel').addEventListener('click', ()=>pasteOverlay.classList.remove('open'));
+pasteOverlay.addEventListener('click', e=>{ if(e.target===pasteOverlay) pasteOverlay.classList.remove('open'); });
+
+function sanitize(card) {
+  return {
+    title: (card.title||'Sem título').toString().slice(0,200),
+    brief: (card.brief||'').toString(),
+    area: AREAS[card.area]?card.area:'pessoal',
+    prio: ['alta','media','baixa'].includes(card.prio)?card.prio:'media',
+    status: ['todo','doing','blocked','done'].includes(card.status)?card.status:'todo',
+    due: card.due&&/^\d{4}-\d{2}-\d{2}$/.test(card.due)?card.due:null,
+    reason: card.reason||'',
+  };
+}
+document.getElementById('pasteCreate').addEventListener('click', async ()=>{
+  let raw = pasteInput.value.trim().replace(/```json|```/g,'').trim();
+  if (!raw) return;
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch {
+    pasteResult.className='paste-result bad';
+    pasteResult.textContent='Não consegui ler o texto. Confira se colou o bloco completo que o Claude mandou.';
+    return;
+  }
+  const list = Array.isArray(parsed) ? parsed : [parsed];
+  let ok = 0, fail = 0;
+  for (const item of list) {
+    const c = sanitize(item);
+    if (!c.status) c.status='todo';
+    try {
+      if (configured) { const created = await dbInsert(c); tasks.push(created); }
+      else tasks.push({ id:'local'+Date.now()+Math.random().toString(36).slice(2,5), ...c });
+      ok++;
+    } catch { fail++; }
+  }
+  render();
+  setSync(fail? '⚠ erro ao salvar' : '✓ salvo', !!fail);
+  pasteResult.className='paste-result ' + (fail? 'bad':'ok');
+  pasteResult.textContent = fail
+    ? `${ok} criado(s), ${fail} falharam (confira a conexão com o banco).`
+    : `✓ ${ok} card(s) criado(s) no painel!`;
+  if (!fail) { pasteInput.value=''; setTimeout(()=>pasteOverlay.classList.remove('open'), 1200); }
+});
+
+load();
+</script>
+</body>
+</html>
